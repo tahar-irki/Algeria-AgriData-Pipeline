@@ -1,0 +1,11 @@
+# Python environment
+__pycache__/
+*.pyc
+
+# Data files (Keep the repo clean; users should run the script to get these)
+*.csv
+*.xlsx
+*.json
+
+# Kaggle download folders
+tmp_path/
