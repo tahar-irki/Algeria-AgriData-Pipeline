@@ -16,4 +16,4 @@ This project combines three distinct data sources:
 ## 📦 Installation & Usage
 1. Clone the repository:
    ```bash
-   git clone [https://github.com/tahar-irki/Algeria-AgriData-Pipeline.git](https://github.com/YOUR_USERNAME/Algeria-AgriData-Pipeline.git)
+   git clone [https://github.com/tahar-irki/Algeria-AgriData-Pipeline.git](https://github.com/tahar-irki/Algeria-AgriData-Pipeline.git)
