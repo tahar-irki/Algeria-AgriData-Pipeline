@@ -42,8 +42,12 @@ def fetch_json(url):
 
 # ---------------- SOIL TYPE ----------------
 def derive_soil_type(clay, sand):
+    if clay is None :
+        return "sandy"
+    if sand is None :
+        return "clay"
     if clay is None or sand is None:
-        return "Loamy"
+        return "unknown"
     silt = max(0, 1000 - (clay + sand))
     if clay >= 400:
         return "Clay"
