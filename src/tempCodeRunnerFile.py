@@ -29,26 +29,6 @@ def derive_soil_type(clay, sand):
 
 def scrape_point(lat, lon):
 
-    # -------- WEATHER --------
-    weather_url = (
-        "https://api.open-meteo.com/v1/forecast"
-        f"?latitude={lat}&longitude={lon}"
-        "&daily=temperature_2m_max,temperature_2m_min,relative_humidity_2m_max"
-        "&forecast_days=7"
-        "&timezone=auto"
-    )
-
-    w = fetch_json(weather_url)
-    daily = w.get("daily", {})
-
-    temperature = np.nan
-    humidity = np.nan
-
-    if daily:
-        temperature = np.nanmean(daily.get("temperature_2m_max", [np.nan]))
-        humidity = np.nanmean(daily.get("relative_humidity_2m_max", [np.nan]))
-
-    moisture = 0.2
 
     # -------- SOIL --------
     nitrogen = np.nan
@@ -58,15 +38,15 @@ def scrape_point(lat, lon):
 
     #  Corrected API properties
     soil_url = (
-        "https://rest.isric.org/soilgrids/v2.0/properties/query"
-        f"?lat={lat}&lon={lon}"
-        "&property=nitrogen"
-        "&property=clay"
-        "&property=sand"
-        "&property=cec"
-        "&depth=15-30cm"
-        "&value=mean"
-    )
+    "https://api.openepi.io/soil/property"
+    f"?lat={lat}&lon={lon}"
+    "&property=nitrogen"
+    "&property=clay"
+    "&property=sand"
+    "&property=cec"
+    "&depth=15-30cm"
+    "&statistics=mean"
+)
 
     s = fetch_json(soil_url)
     layers = s.get("properties", {}).get("layers", [])
@@ -88,16 +68,15 @@ def scrape_point(lat, lon):
         except:
             pass
 
-    soil_type = derive_soil_type(clay, sand)
+    
 
     phosphorus = nitrogen * 0.4 if not np.isnan(nitrogen) else np.nan
     potassium = cec * 0.5 if not np.isnan(cec) else np.nan
 
     return {
-        "Temperature": temperature,
-        "Humidity": humidity,
-        "Moisture": moisture,
-        "Soil Type": soil_type,
+        "Sand": sand,
+        "Clay":clay,
+        "Cec":cec,
         "Nitrogen": nitrogen,
         "Phosphorus": phosphorus,
         "Potassium": potassium,
@@ -107,7 +86,6 @@ def scrape_point(lat, lon):
 
 # ---------------- RUN SCRAPER ----------------
 
-# Northern Algeria 
 lats = np.linspace(32.0, 37.5, 8)
 lons = np.linspace(-8.7, 12.0, 8)
 
@@ -119,7 +97,7 @@ for lat in lats:
     for lon in lons:
         print(f"{cnt}📍 {lat:.2f}, {lon:.2f}")
         rows.append(scrape_point(lat, lon))
-        time.sleep(1)
+        time.sleep(6)
         cnt += 1
 
 df = pd.DataFrame(rows)
@@ -127,5 +105,5 @@ df = pd.DataFrame(rows)
 print("\nROWS:", len(df))
 print(df.head())
 
-df.to_csv("algeria_crop_features.csv", index=False)
-print("\n✅ Saved: algeria_crop_features.csv")
+df.to_csv("testfetcher.csv", index=False)
+print("\n✅ Saved: ")
