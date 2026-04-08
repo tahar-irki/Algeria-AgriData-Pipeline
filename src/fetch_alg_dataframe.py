@@ -9,52 +9,51 @@ from threading import Lock
 
 # ---------------- CONFIGURATION ----------------
 STEP_SIZE = 0.08
-LAT_START, LAT_END = 30.0, 37.0
-LON_START, LON_END = -1.0, 8.5
+LAT_START, LAT_END = 34.5, 37.2
+LON_START, LON_END = -1.5, 8.5
 MAX_WORKERS = 1
-TIMEOUT = 15
-RETRIES = 2
+TIMEOUT = 20
+RETRIES = 3
 
 # Resolve project root (agro_alg/) from src/
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.path.join(BASE_DIR, "data")
-OUTPUT_FILE = os.path.join(DATA_DIR, "algeria_agro_ml.csv")
+OUTPUT_FILE = os.path.join(DATA_DIR, "algeria_agro_data.csv")
 os.makedirs(DATA_DIR, exist_ok=True)
 
 write_lock = Lock()  # prevent race conditions when writing
 
 # ---------------- API HELPER ----------------
-def fetch_json(url):
+def fetch_json(url ,lat ,lon):
     for i in range(RETRIES):
+        current_time = datetime.now().strftime('%H:%M:%S')
         try:
             r = requests.get(url, timeout=TIMEOUT)
             if r.status_code == 200:
                 return r.json()
             elif r.status_code == 429:
-                wait = 2 * (i + 1)
-                print(f"⚠️ 429 rate limit → sleep {wait}s")
+                wait = 5 * (i + 1)
+                print(f"🕒 [{current_time}] ⚠️ 429 rate limit → sleep {wait}s at {lat} ,{lon}")
                 time.sleep(wait)
             else:
-                print(f"⚠️ HTTP {r.status_code}")
+                print(f"🕒 [{current_time}] ⚠️ HTTP {r.status_code} at {lat} ,{lon}")
         except Exception as e:
-            time.sleep(1.5 * (i + 1))
+            print(f"🕒 [{current_time}] ❌ Connection Error: {e} at {lat} ,{lon}")
     return {}
 
 # ---------------- SOIL TYPE ----------------
-def derive_soil_type(clay, sand):
-    if clay is None :
-        return "sandy"
-    if sand is None :
-        return "clay"
-    if clay is None or sand is None:
+def derive_soil_type(clay, sand,silt):
+    if clay is None or sand is None or silt is None:
         return "unknown"
-    silt = max(0, 1000 - (clay + sand))
-    if clay >= 400:
+    if clay >= 300:
         return "Clay"
-    if sand >= 850:
+    if sand >= 550:
         return "Sandy"
-    if silt >= 800:
+    if silt >= 600:
         return "Silt"
+    if 230<= sand <=500 and 230<= silt <=500 and 70<= clay <=230:
+        return "loamy"
+    
     return "Loamy"
 
 # ---------------- CORE FUNCTION ----------------
@@ -71,7 +70,7 @@ def scrape_point(lat, lon):
         "&daily=temperature_2m_mean,relative_humidity_2m_mean,precipitation_sum&timezone=auto"
     )
 
-    w_resp = fetch_json(w_url)
+    w_resp = fetch_json(w_url, lat, lon)
     w_data = w_resp.get("daily", {})
 
     temps = np.array(w_data.get("temperature_2m_mean", []))
@@ -85,15 +84,15 @@ def scrape_point(lat, lon):
     temp_mean = np.nanmean(temps)
     humidity_mean = np.nanmean(humidity)
     rain_total = np.nansum(rain)
-    time.sleep(0.3)
+    time.sleep(4)
     # SOIL
     s_url = (
         f"https://rest.isric.org/soilgrids/v2.0/properties/query?lat={lat}&lon={lon}"
-        "&property=nitrogen&property=clay&property=sand&property=phh2o&property=soc&property=cec"
+        "&property=nitrogen&property=clay&property=sand&property=phh2o&property=soc&property=cec&property=silt"
         "&depth=15-30cm&value=mean"
     )
 
-    s_resp = fetch_json(s_url)
+    s_resp = fetch_json(s_url, lat, lon)
     layers = s_resp.get("properties", {}).get("layers", [])
 
     s_v = {}
@@ -108,15 +107,16 @@ def scrape_point(lat, lon):
         return None
 
     # SCALING (approximate)
-    nitrogen = s_v.get("nitrogen", 0) / 10
+# Using 'or 0' AFTER the get() ensures that if the result is None, it becomes 0
+    nitrogen = (s_v.get("nitrogen") or 0) / 10
     phosphorus = nitrogen * 0.5
-    potassium = (s_v.get("cec", 0) / 10) * 0.8
+    potassium = ((s_v.get("cec") or 0) / 10) * 0.8
 
-    ph = s_v.get("phh2o", 0) / 10
-    organic_c = s_v.get("soc", 0) / 10
+    ph = (s_v.get("phh2o") or 0) / 10
+    organic_c = (s_v.get("soc") or 0) / 10
 
-    soil_type = derive_soil_type(s_v.get("clay"), s_v.get("sand"))
-    time.sleep(1)
+    soil_type = derive_soil_type(s_v.get("clay"), s_v.get("sand"), s_v.get("silt"))
+    time.sleep(4)
     return {
         "coord_key": coord_key,
         "Latitude": round(lat, 4),
