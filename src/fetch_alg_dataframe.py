@@ -45,14 +45,12 @@ def fetch_json(url ,lat ,lon):
 def derive_soil_type(clay, sand,silt):
     if clay is None or sand is None or silt is None:
         return "unknown"
+    if sand >= 450:
+        return "Sandy"
+    if silt >= 450:
+        return "Silt"
     if clay >= 300:
         return "Clay"
-    if sand >= 550:
-        return "Sandy"
-    if silt >= 600:
-        return "Silt"
-    if 230<= sand <=500 and 230<= silt <=500 and 70<= clay <=230:
-        return "loamy"
     
     return "Loamy"
 
