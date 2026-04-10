@@ -1,182 +1,227 @@
+import asyncio
+import aiohttp
 import pandas as pd
 import numpy as np
-import requests
-import time
 import os
 from datetime import datetime, timedelta
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from threading import Lock
 
-# ---------------- CONFIGURATION ----------------
-STEP_SIZE = 0.08
-LAT_START, LAT_END = 34.5, 37.2
-LON_START, LON_END = -1.5, 8.5
-MAX_WORKERS = 1
-TIMEOUT = 20
-RETRIES = 3
+# ============================================================
+# CONFIGURATION
+# ============================================================
+STEP_SIZE  = 0.06
+LAT_START, LAT_END = 35.1, 37.0
+LON_START, LON_END = 1.8, 4.1
+BATCH_SIZE = 30
 
-# Resolve project root (agro_alg/) from src/
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DATA_DIR = os.path.join(BASE_DIR, "data")
-OUTPUT_FILE = os.path.join(DATA_DIR, "algeria_agro_data.csv")
+BASE_DIR    = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DATA_DIR    = os.path.join(BASE_DIR, "data")
+OUTPUT_FILE = os.path.join(DATA_DIR, "midAlgeria_agro_data.csv")
 os.makedirs(DATA_DIR, exist_ok=True)
 
-write_lock = Lock()  # prevent race conditions when writing
+WEATHER_SEM = asyncio.Semaphore(2)
+SOIL_LOCK   = asyncio.Lock()
+SOIL_DELAY  = 2
 
-# ---------------- API HELPER ----------------
-def fetch_json(url ,lat ,lon):
-    for i in range(RETRIES):
-        current_time = datetime.now().strftime('%H:%M:%S')
-        try:
-            r = requests.get(url, timeout=TIMEOUT)
-            if r.status_code == 200:
-                return r.json()
-            elif r.status_code == 429:
-                wait = 5 * (i + 1)
-                print(f"🕒 [{current_time}] ⚠️ 429 rate limit → sleep {wait}s at {lat} ,{lon}")
-                time.sleep(wait)
-            else:
-                print(f"🕒 [{current_time}] ⚠️ HTTP {r.status_code} at {lat} ,{lon}")
-        except Exception as e:
-            print(f"🕒 [{current_time}] ❌ Connection Error: {e} at {lat} ,{lon}")
+RETRIES = 5
+
+# ============================================================
+# CORE FETCH
+# ============================================================
+async def fetch(session: aiohttp.ClientSession, url: str,
+                sem, lat: float, lon: float) -> dict:
+    async with sem:
+        for attempt in range(RETRIES):
+            try:
+                async with session.get(
+                    url, timeout=aiohttp.ClientTimeout(total=30)
+                ) as r:
+                    if r.status == 200:
+                        return await r.json(content_type=None)
+                    elif r.status == 429:
+                        wait = 2 ** attempt + 5
+                        print(f"⏳  429 at ({lat:.2f},{lon:.2f}) "
+                              f"→ sleeping {wait}s [attempt {attempt+1}/{RETRIES}]")
+                        await asyncio.sleep(wait)
+                    else:
+                        print(f"⚠️  HTTP {r.status} at ({lat:.2f},{lon:.2f})")
+                        await asyncio.sleep(2)
+            except asyncio.TimeoutError:
+                wait = 2 ** attempt
+                print(f"⏱  Timeout at ({lat:.2f},{lon:.2f}) → retry in {wait}s")
+                await asyncio.sleep(wait)
+            except Exception as e:
+                wait = 2 ** attempt
+                print(f"❌  {type(e).__name__}: {e} at ({lat:.2f},{lon:.2f}) "
+                      f"→ retry in {wait}s")
+                await asyncio.sleep(wait)
+    print(f"🚫  Giving up on ({lat:.2f},{lon:.2f}) after {RETRIES} attempts")
     return {}
 
-# ---------------- SOIL TYPE ----------------
-def derive_soil_type(clay, sand,silt):
-    if clay is None or sand is None or silt is None:
-        return "unknown"
+# ============================================================
+# WEATHER AGENT
+# ============================================================
+async def weather_agent(session, lat: float, lon: float) -> dict | None:
+    await asyncio.sleep(0.5)
+    end   = datetime.now().date() - timedelta(days=5)
+    start = end - timedelta(days=365)
+
+    url = (
+        f"https://archive-api.open-meteo.com/v1/archive"
+        f"?latitude={lat}&longitude={lon}"
+        f"&start_date={start}&end_date={end}"
+        "&daily=temperature_2m_mean,relative_humidity_2m_mean,"
+        "precipitation_sum&timezone=auto"
+    )
+
+    data = (await fetch(session, url, WEATHER_SEM, lat, lon)).get("daily", {})
+
+    temps    = np.array(data.get("temperature_2m_mean")       or [], dtype=float)
+    humidity = np.array(data.get("relative_humidity_2m_mean") or [], dtype=float)
+    rain     = np.array(data.get("precipitation_sum")         or [], dtype=float)
+
+    if len(temps) == 0:
+        print(f"⚠️  No weather data at ({lat:.2f},{lon:.2f})")
+        return None
+
+    return {
+        "Temperature": round(float(np.nanmean(temps)),    2),
+        "Humidity":    round(float(np.nanmean(humidity)), 2),
+        "Rainfall":    round(float(np.nansum(rain)),      2),
+    }
+
+# ============================================================
+# SOIL AGENT
+# ============================================================
+def _derive_soil_type(clay, sand, silt) -> str:
+    if None in (clay, sand, silt):
+        return "Unknown"
     if sand >= 450:
         return "Sandy"
     if silt >= 450:
         return "Silt"
     if clay >= 300:
         return "Clay"
-    
     return "Loamy"
 
-# ---------------- CORE FUNCTION ----------------
-def scrape_point(lat, lon):
-    coord_key = f"{lat:.4f}_{lon:.4f}"
+async def soil_agent(session, lat: float, lon: float) -> dict | None:
+    async with SOIL_LOCK:
+        await asyncio.sleep(SOIL_DELAY)
 
-    end_date = datetime.now().date() - timedelta(days=5)
-    start_date = end_date - timedelta(days=365)
+        url = (
+            f"https://rest.isric.org/soilgrids/v2.0/properties/query"
+            f"?lon={lon}&lat={lat}&number_1km=1"
+            "&property=nitrogen&property=clay&property=sand"
+            "&property=phh2o&property=soc&property=cec&property=silt"
+            "&depth=15-30cm&value=mean"
+        )
 
-    # WEATHER
-    w_url = (
-        f"https://archive-api.open-meteo.com/v1/archive?latitude={lat}&longitude={lon}"
-        f"&start_date={start_date}&end_date={end_date}"
-        "&daily=temperature_2m_mean,relative_humidity_2m_mean,precipitation_sum&timezone=auto"
-    )
+        resp = await fetch(session, url, asyncio.Semaphore(1), lat, lon)
 
-    w_resp = fetch_json(w_url, lat, lon)
-    w_data = w_resp.get("daily", {})
+    layers = resp.get("properties", {}).get("layers", [])
 
-    temps = np.array(w_data.get("temperature_2m_mean", []))
-    humidity = np.array(w_data.get("relative_humidity_2m_mean", []))
-    rain = np.array(w_data.get("precipitation_sum", []))
-
-    if len(temps) == 0:
-        print(f"⚠️ No weather data @ {lat:.2f},{lon:.2f}")
-        return None
-
-    temp_mean = np.nanmean(temps)
-    humidity_mean = np.nanmean(humidity)
-    rain_total = np.nansum(rain)
-    time.sleep(4)
-    # SOIL
-    s_url = (
-        f"https://rest.isric.org/soilgrids/v2.0/properties/query?lat={lat}&lon={lon}"
-        "&property=nitrogen&property=clay&property=sand&property=phh2o&property=soc&property=cec&property=silt"
-        "&depth=15-30cm&value=mean"
-    )
-
-    s_resp = fetch_json(s_url, lat, lon)
-    layers = s_resp.get("properties", {}).get("layers", [])
-
-    s_v = {}
-    for l in layers:
+    sv: dict = {}
+    for layer in layers:
         try:
-            s_v[l["name"]] = l["depths"][0]["values"]["mean"]
-        except:
+            sv[layer["name"]] = layer["depths"][0]["values"]["mean"]
+        except (KeyError, IndexError, TypeError):
             continue
 
-    if not s_v:
-        print(f"⚠️ No soil data @ {lat:.2f},{lon:.2f}")
+    if not sv:
+        print(f"⚠️  No soil data at ({lat:.2f},{lon:.2f})")
         return None
 
-    # SCALING (approximate)
-# Using 'or 0' AFTER the get() ensures that if the result is None, it becomes 0
-    nitrogen = (s_v.get("nitrogen") or 0) / 10
-    phosphorus = nitrogen * 0.5
-    potassium = ((s_v.get("cec") or 0) / 10) * 0.8
+    def g(k):
+        return sv.get(k) or 0
 
-    ph = (s_v.get("phh2o") or 0) / 10
-    organic_c = (s_v.get("soc") or 0) / 10
+    clay, sand, silt = sv.get("clay"), sv.get("sand"), sv.get("silt")
 
-    soil_type = derive_soil_type(s_v.get("clay"), s_v.get("sand"), s_v.get("silt"))
-    time.sleep(4)
     return {
-        "coord_key": coord_key,
-        "Latitude": round(lat, 4),
-        "Longitude": round(lon, 4),
-        "Temperature": round(temp_mean, 2),
-        "Humidity": round(humidity_mean, 2),
-        "Rainfall": round(rain_total, 2),
-        "Soil_pH": round(ph, 2),
-        "Nitrogen": round(nitrogen, 2),
-        "Phosphorus": round(phosphorus, 2),
-        "Potassium": round(potassium, 2),
-        "Organic_C": round(organic_c, 2),
-        "Soil_Type": soil_type
+        "Soil_pH":        round(g("phh2o")    / 10, 2),
+        "Nitrogen":       round(g("nitrogen") / 10, 2),
+        "Phosphorus_est": round((g("nitrogen") / 10) * 0.5, 2),
+        "Potassium":      round((g("cec")      / 10) * 0.8, 2),
+        "Organic_C":      round(g("soc")       / 10, 2),
+        "Soil_Type":      _derive_soil_type(clay, sand, silt),
     }
 
-# ---------------- LOAD EXISTING ----------------
-if os.path.exists(OUTPUT_FILE):
-    existing_df = pd.read_csv(OUTPUT_FILE)
-    finished_coords = set(existing_df['coord_key'])
-    print(f"🔄 Resuming: {len(finished_coords)} points loaded")
-else:
-    finished_coords = set()
-    print("🆕 Starting new dataset")
+# ============================================================
+# POINT ORCHESTRATOR
+# ============================================================
+async def process_point(session, lat: float, lon: float) -> dict | None:
+    weather, soil = await asyncio.gather(
+        weather_agent(session, lat, lon),
+        soil_agent(session, lat, lon),
+    )
 
-# ---------------- GRID ----------------
-lat_range = np.arange(LAT_START, LAT_END, STEP_SIZE)
-lon_range = np.arange(LON_START, LON_END, STEP_SIZE)
-points = [(lat, lon) for lat in lat_range for lon in lon_range]
+    if weather is None or soil is None:
+        return None
 
-points_to_process = [
-    (lat, lon) for lat, lon in points
-    if f"{lat:.4f}_{lon:.4f}" not in finished_coords
-]
+    return {
+        "coord_key": f"{lat:.4f}_{lon:.4f}",
+        "Latitude":  round(lat, 4),
+        "Longitude": round(lon, 4),
+        **weather,
+        **soil,
+    }
 
-print(f"📍 Remaining points: {len(points_to_process)}")
-
-# ---------------- SAVE ----------------
-def save_row(row):
-    with write_lock:
-        df = pd.DataFrame([row])
-        df.to_csv(OUTPUT_FILE, mode='a', header=not os.path.exists(OUTPUT_FILE), index=False)
-
-# ---------------- EXECUTION ----------------
-count_saved = 0
-count_processed = 0
-
-with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-    futures = {executor.submit(scrape_point, lat, lon): (lat, lon) for lat, lon in points_to_process}
-
-    for future in as_completed(futures):
-        count_processed += 1
+# ============================================================
+# MAIN
+# ============================================================
+async def main():
+    finished: set[str] = set()
+    if os.path.exists(OUTPUT_FILE):
         try:
-            result = future.result()
+            finished = set(pd.read_csv(OUTPUT_FILE)["coord_key"].astype(str))
+            print(f"🔄  Resuming — {len(finished)} points already done")
         except Exception as e:
-            print(f"❌ Worker error: {e}")
-            continue
+            print(f"⚠️  Could not read existing CSV ({e}), starting fresh")
+    else:
+        print("🆕  Starting new dataset")
 
-        if result:
-            save_row(result)
-            count_saved += 1
+    lat_range = np.arange(LAT_START, LAT_END, STEP_SIZE)
+    lon_range = np.arange(LON_START, LON_END, STEP_SIZE)
+    points = [
+        (round(float(lat), 4), round(float(lon), 4))
+        for lat in lat_range
+        for lon in lon_range
+        if f"{lat:.4f}_{lon:.4f}" not in finished
+    ]
+    total = len(points)
+    print(f"📍  Points remaining: {total}")
+    print(f"⏱   Estimated time: ~{round(total * SOIL_DELAY / 60)} minutes minimum\n")
 
-        if count_processed % 50 == 0:
-            print(f"⚙️ Processed: {count_processed} | Saved: {count_saved}")
+    if total == 0:
+        print("✅  Nothing to do.")
+        return
 
-print(f"✅ Done. Total saved: {count_saved}")
+    saved = 0
+    connector = aiohttp.TCPConnector(limit=12, ttl_dns_cache=300)
+
+    async with aiohttp.ClientSession(connector=connector) as session:
+        for batch_start in range(0, total, BATCH_SIZE):
+            batch = points[batch_start : batch_start + BATCH_SIZE]
+            tasks = [process_point(session, lat, lon) for lat, lon in batch]
+            results = await asyncio.gather(*tasks)
+
+            rows = [r for r in results if r is not None]
+            if rows:
+                df = pd.DataFrame(rows)
+                write_header = not os.path.exists(OUTPUT_FILE)
+                df.to_csv(OUTPUT_FILE, mode="a", header=write_header, index=False)
+                saved += len(rows)
+
+            batch_num     = batch_start // BATCH_SIZE + 1
+            total_batches = (total + BATCH_SIZE - 1) // BATCH_SIZE
+            pct           = round(saved / total * 100, 1)
+            print(
+                f"⚙️   Batch {batch_num}/{total_batches} | "
+                f"this batch: {len(rows)}/{len(batch)} saved | "
+                f"total: {saved}/{total} ({pct}%)"
+            )
+
+    print(f"\n✅  Finished. Total rows saved: {saved}")
+    print(f"📁  Output: {OUTPUT_FILE}")
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
