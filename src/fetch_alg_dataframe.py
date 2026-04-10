@@ -5,9 +5,15 @@ import numpy as np
 import os
 from datetime import datetime, timedelta
 
-# ============================================================
-# CONFIGURATION
-# ============================================================
+#/////////////////////
+#/// CONFIGURATION ///
+#///////////////////// 
+
+#the original coordinates, reduced because of the time and rate limit of the APIs
+# STEP_SIZE = 0.08
+# LAT_START, LAT_END = 34.5, 37.2
+# LON_START, LON_END = -1.5, 8.5
+
 STEP_SIZE  = 0.06
 LAT_START, LAT_END = 35.1, 37.0
 LON_START, LON_END = 1.8, 4.1
@@ -15,7 +21,7 @@ BATCH_SIZE = 30
 
 BASE_DIR    = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR    = os.path.join(BASE_DIR, "data")
-OUTPUT_FILE = os.path.join(DATA_DIR, "midAlgeria_agro_data.csv")
+OUTPUT_FILE = os.path.join(DATA_DIR, "mid_algeria_agro_data.csv")
 os.makedirs(DATA_DIR, exist_ok=True)
 
 WEATHER_SEM = asyncio.Semaphore(2)
@@ -24,9 +30,10 @@ SOIL_DELAY  = 2
 
 RETRIES = 5
 
-# ============================================================
-# CORE FETCH
-# ============================================================
+#//////////////////
+#/// CORE FETCH ///
+#//////////////////
+
 async def fetch(session: aiohttp.ClientSession, url: str,
                 sem, lat: float, lon: float) -> dict:
     async with sem:
@@ -57,9 +64,10 @@ async def fetch(session: aiohttp.ClientSession, url: str,
     print(f"🚫  Giving up on ({lat:.2f},{lon:.2f}) after {RETRIES} attempts")
     return {}
 
-# ============================================================
-# WEATHER AGENT
-# ============================================================
+#/////////////////////
+#/// WEATHER AGENT ///
+#/////////////////////
+
 async def weather_agent(session, lat: float, lon: float) -> dict | None:
     await asyncio.sleep(0.5)
     end   = datetime.now().date() - timedelta(days=5)
@@ -89,15 +97,16 @@ async def weather_agent(session, lat: float, lon: float) -> dict | None:
         "Rainfall":    round(float(np.nansum(rain)),      2),
     }
 
-# ============================================================
-# SOIL AGENT
-# ============================================================
+#//////////////////#
+#/// SOIL AGENT ///#
+#//////////////////#
+
 def _derive_soil_type(clay, sand, silt) -> str:
     if None in (clay, sand, silt):
         return "Unknown"
-    if sand >= 450:
+    if sand >= 500:
         return "Sandy"
-    if silt >= 450:
+    if silt >= 500:
         return "Silt"
     if clay >= 300:
         return "Clay"
@@ -144,9 +153,10 @@ async def soil_agent(session, lat: float, lon: float) -> dict | None:
         "Soil_Type":      _derive_soil_type(clay, sand, silt),
     }
 
-# ============================================================
-# POINT ORCHESTRATOR
-# ============================================================
+#//////////////////////////#
+#/// POINT ORCHESTRATOR ///#
+#//////////////////////////#
+
 async def process_point(session, lat: float, lon: float) -> dict | None:
     weather, soil = await asyncio.gather(
         weather_agent(session, lat, lon),
@@ -164,9 +174,10 @@ async def process_point(session, lat: float, lon: float) -> dict | None:
         **soil,
     }
 
-# ============================================================
-# MAIN
-# ============================================================
+#////////////#
+#/// MAIN ///#
+#////////////#
+
 async def main():
     finished: set[str] = set()
     if os.path.exists(OUTPUT_FILE):

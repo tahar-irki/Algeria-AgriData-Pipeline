@@ -6,6 +6,6 @@ __pycache__/
 *.csv
 *.xlsx
 *.json
-
+*.html
 # Kaggle download folders
 tmp_path/
