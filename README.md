@@ -346,15 +346,16 @@ Before training, download the dataset.
 
 ![Confusion Matrix](docs/confusion_matrix.png)
 
-/docs/confusion_matrix.png
 
-```
+
+
+
 
 ### 🗺 Crop Recommendation Map
 
 ![Crop Map](docs/crop_map.png)
 
-/docs/crop_map.png
+
 ```
 
 
@@ -378,7 +379,7 @@ python trainingCode.py
 
 ```
 better install live server extension
-right click on the file algeria_crop_map.html
+right click on the file and select the extension algeria_crop_map.html
 ```
 
 ---
@@ -419,6 +420,6 @@ Student project focused on **AI for Agriculture in Algeria**.
 ## 📦 Installation & Usage
 1. Clone the repository:
    ```bash
-   git clone https://github.com/tahar-irki/Algeria-AgriData-Pipeline.git
+   git clone https://github.com/tahar-irki/Algeria-AgroData-Pipeline.git
 
 If you found this useful, feel free to ⭐ the repository.
