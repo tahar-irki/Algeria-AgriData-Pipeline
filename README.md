@@ -356,7 +356,7 @@ Before training, download the dataset.
 ![Crop Map](docs/crop_map.png)
 
 
-```
+
 
 
 ---
