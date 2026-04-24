@@ -4,3 +4,8 @@ requests
 kagglehub
 folium
 aiohttp
+reverse_geocoder 
+pycountry
+matplotlib
+streamlit 
+plotly
