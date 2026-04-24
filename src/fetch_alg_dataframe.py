@@ -9,19 +9,40 @@ from datetime import datetime, timedelta
 #/// CONFIGURATION ///
 #///////////////////// 
 
-#the original coordinates, reduced because of the time and rate limit of the APIs
-# STEP_SIZE = 0.08
-# LAT_START, LAT_END = 34.5, 37.2
-# LON_START, LON_END = -1.5, 8.5
+#The coordinates of the file mid_algeria_agro_data.csv
+#the file was changed to north_algeria_agro_data.csv for visualization reasons
 
-STEP_SIZE  = 0.06
-LAT_START, LAT_END = 35.1, 37.0
-LON_START, LON_END = 1.8, 4.1
+#STEP_SIZE  = 0.06
+#LAT_START, LAT_END = 35.1, 37.0
+#LON_START, LON_END = 1.8, 4.1
+
+STEP_SIZE  = 0.08
+LAT_START, LAT_END = 32.0, 37.2
+LON_START, LON_END = -2.2, 8.7
 BATCH_SIZE = 30
 
-BASE_DIR    = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DATA_DIR    = os.path.join(BASE_DIR, "data")
-OUTPUT_FILE = os.path.join(DATA_DIR, "mid_algeria_agro_data.csv")
+def find_data_dir(start_path):
+    curr = os.path.abspath(start_path)
+    while curr != os.path.dirname(curr):
+        # Check if a directory named 'data' exists in the current level
+        potential_data_path = os.path.join(curr, 'data')
+        if os.path.isdir(potential_data_path):
+            return potential_data_path
+        curr = os.path.dirname(curr)
+    return None
+
+# Get the dynamic path
+DATA_DIR = find_data_dir(__file__)
+
+if DATA_DIR:
+    # Option A: File is directly in the data folder
+    OUTPUT_FILE = os.path.join(DATA_DIR, "north_algeria_agro_data.csv")
+    
+    print(f"Success! Data directory found at: {DATA_DIR}")
+    print(f"Output file path: {OUTPUT_FILE}")
+else:
+    print("Error: Could not find the 'data' directory in any parent folders.")
+    
 os.makedirs(DATA_DIR, exist_ok=True)
 
 WEATHER_SEM = asyncio.Semaphore(2)
@@ -45,7 +66,7 @@ async def fetch(session: aiohttp.ClientSession, url: str,
                     if r.status == 200:
                         return await r.json(content_type=None)
                     elif r.status == 429:
-                        wait = 2 ** attempt + 5
+                        wait = 3 ** attempt + 10
                         print(f"⏳  429 at ({lat:.2f},{lon:.2f}) "
                               f"→ sleeping {wait}s [attempt {attempt+1}/{RETRIES}]")
                         await asyncio.sleep(wait)

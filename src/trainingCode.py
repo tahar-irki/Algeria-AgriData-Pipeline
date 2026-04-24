@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-
+import os
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, f1_score, confusion_matrix
@@ -12,10 +12,25 @@ import sys
 #/// 1- DATA CLEANING ///#
 #////////////////////////#
 
+
+def find__dir(start_path,filename):
+    curr = os.path.abspath(start_path)
+    while curr != os.path.dirname(curr):
+        potential_data_path = os.path.join(curr, filename)
+        if os.path.isdir(potential_data_path):
+            return potential_data_path
+        curr = os.path.dirname(curr)
+    return None
+
+# Get paths dynamically
+DATA_DIR = find__dir(__file__, 'data')
+SRC_DIR = find__dir(__file__, 'src')
+INPUT_FILE = os.path.join(DATA_DIR, "crop_remmendation_dataset.csv")
+
 # Load dataset you need to run crop_dataframe.py before running this code so the dataset is loaded
 
 try:
-    train_df = pd.read_csv("data/crop_remmendation_dataset.csv")
+    train_df = pd.read_csv(INPUT_FILE)
 
 except FileNotFoundError:
     print("\nError: The file 'data/crop_remmendation_dataset.csv' was not found.")
@@ -34,7 +49,7 @@ except Exception as e:
 
 train_df = train_df.rename(columns={
     'N': 'Nitrogen',
-    'P': 'Phosphorus',
+    'P': 'Phosphorus_est',
     'K': 'Potassium',
     'Organic_Carbon': 'Organic_C'
 })
@@ -59,7 +74,7 @@ train_df = train_df.drop(columns=columns_to_remove, errors='ignore')
 
 # rearrange the columns so they are match in both 1st dataset and 2nd dataset.
 
-rearrange_columns= ['Temperature','Humidity','Rainfall','Soil_pH','Nitrogen','Phosphorus','Potassium','Organic_C','Soil_Type','Recommended_Crop']
+rearrange_columns= ['Temperature','Humidity','Rainfall','Soil_pH','Nitrogen','Phosphorus_est','Potassium','Organic_C','Soil_Type','Recommended_Crop']
 train_df= train_df[rearrange_columns]
 
 # Soil type (categorical) and unsuring they are the same code with the algerian dataset
@@ -124,33 +139,38 @@ print("Confusion Matrix:", cm)
 
 import matplotlib.pyplot as plt
 
-plt.figure()
-plt.imshow(cm)
-plt.title("Confusion Matrix")
-plt.xlabel("Predicted")
-plt.ylabel("Actual")
+from sklearn.metrics import ConfusionMatrixDisplay
+crop_names = model.classes_
+# Create the display object using the model's internal classes
+disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=crop_names)
+# Set up the figure size (larger for 10 crops)
+fig, ax = plt.subplots(figsize=(12, 10))
+# Plot the matrix
+# xticks_rotation=45 prevents the crop names from overlapping
+disp.plot(ax=ax, cmap='YlGnBu', xticks_rotation=45, values_format='d')
+plt.title("Random Forest: Crop Recommendation Confusion Matrix")
+ax.grid(False)
+plt.show()
 
 # to show the values in the matrix
 
-for i in range(cm.shape[0]):
-    for j in range(cm.shape[1]):
-        plt.text(j, i, cm[i, j], ha='center', va='center')
 
-plt.colorbar()
-plt.show()
 
 #///////////////////////////////////////////////#
 #///3- applying the model on algeria dataset ///#
 #///////////////////////////////////////////////#
 
+INPUT_FILEE = os.path.join(DATA_DIR, "north_algeria_agro_data.csv")
 
 try:
-    algeria_df = pd.read_csv("data/mid_algeria_agro_data.csv")
+    algeria_df = pd.read_csv(INPUT_FILEE)
+
+
 
 except FileNotFoundError:
-    print("\nError: The file 'data/mid_algeria_agro_data.csv' was not found.")
+    print("\nError: The file 'data/north_algeria_agro_data.csv' was not found.")
     print("Please run fetch_alg_dataframe.py first to fetch the dataset.")
-    print("or just redownload the file from github.com/tahar-irki/Algeria-AgriData-Pipeline <3 \n")
+    print("or just download the file from github.com/tahar-irki/Algeria-AgriData-Pipeline <3 \n")
     sys.exit() 
 
 # cleaning the dataset /remove coordinate key/
@@ -190,9 +210,11 @@ algeria_df["recommended_crop"] = predictions
 #readd the coordinates so we can know where we should put the icon in the map
 
 algeria_df[["Latitude", "Longitude"]] = coords
-algeria_df.to_csv("data/algeria_crop_recommendations.csv", index=False)
+algeria_df["Soil_Type"] = soil_encoder.inverse_transform(algeria_df["Soil_Type"])
+output_path = os.path.join(DATA_DIR, "north_algeria_crop_recommendations.csv")
+algeria_df.to_csv(output_path, index=False)
 
-print("\nSaved predictions to data folder as algeria_crop_recommendations.csv")
+print("\nSaved predictions to data folder as north_algeria_crop_recommendations.csv")
 
 #///////////////////////////////#
 #/// 4- VISUALIZATION ON MAP ///#
@@ -235,6 +257,6 @@ for i in range(len(algeria_df)):
 
 # Save map in src folder you need to run it to see the result
 
-m.save("src/algeria_crop_map.html")
+m.save(os.path.join(SRC_DIR, "north_algeria_crop_map.html"))
 
-print("Map saved as algeria_crop_map.html in src folder.")
+print("Map saved as north_algeria_crop_map.html in src folder.")

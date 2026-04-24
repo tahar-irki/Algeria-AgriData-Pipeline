@@ -3,12 +3,21 @@ import shutil
 import os
 
 
-PROJECT_ROOT = os.path.dirname(
-        os.path.dirname(os.path.abspath(__file__))
-    )
 
 
-DATA_DIR = os.path.join(PROJECT_ROOT, "data")
+def find_data_dir(start_path):
+    curr = os.path.abspath(start_path)
+    while curr != os.path.dirname(curr):
+        # Check if a directory named 'data' exists in the current level
+        potential_data_path = os.path.join(curr, 'data')
+        if os.path.isdir(potential_data_path):
+            return potential_data_path
+        curr = os.path.dirname(curr)
+    return None
+
+# Get the dynamic path
+DATA_DIR = find_data_dir(__file__)
+
 
 
 tmp_path = kagglehub.dataset_download(
