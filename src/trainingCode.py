@@ -220,41 +220,133 @@ print("\nSaved predictions to data folder as north_algeria_crop_recommendations.
 #/// 4- VISUALIZATION ON MAP ///#
 #///////////////////////////////#
 
+
+#first we need to reduce the number of point so the map does not freeze
+
+reduced_algeria_df= algeria_df.copy()
+
+LAT_START = 32.0
+LON_START = -2.2
+
+LAT_STEP = 0.08
+LON_STEP = 0.08
+
+BLOCK_SIZE = 3   # 3 → ~27 km 
+
+reduced_algeria_df["i"] = ((reduced_algeria_df["Latitude"] - LAT_START) / LAT_STEP).round().astype(int)
+reduced_algeria_df["j"] = ((reduced_algeria_df["Longitude"] - LON_START) / LON_STEP).round().astype(int)
+
+reduced_algeria_df["block_i"] = reduced_algeria_df["i"] // BLOCK_SIZE
+reduced_algeria_df["block_j"] = reduced_algeria_df["j"] // BLOCK_SIZE
+
+counts = reduced_algeria_df["recommended_crop"].value_counts()
+
+# Assign priority: rarer crop → higher value so not just one crop dominates the others
+
+priority = {crop: rank for rank, crop in enumerate(counts.index)}
+numeric_cols = [
+    "Temperature", "Humidity", "Rainfall",
+    "Soil_pH", "Nitrogen", "Phosphorus_est", "Potassium", "Organic_C"
+]
+
+numeric_cols = [col for col in numeric_cols if col in reduced_algeria_df.columns]
+def aggregate_block(group):
+    result = {}
+
+    # ---- Average numeric values ----
+    for col in numeric_cols:
+        result[col] = group[col].mean()
+
+    # ---- Priority crop selection ----
+    best_idx = group["recommended_crop"].map(priority).idxmax()
+    result["recommended_crop"] = group.loc[best_idx, "recommended_crop"]
+
+    # ---- keep soil type ----
+    if "Soil_Type" in group.columns:
+        result["Soil_Type"] = group["Soil_Type"].mode()[0]
+
+    return pd.Series(result)
+
+reduced_df = (
+    reduced_algeria_df.groupby(["block_i", "block_j"])
+      .apply(aggregate_block)
+      .reset_index()
+)
+reduced_df["Latitude"] = LAT_START + (
+    reduced_df["block_i"] * BLOCK_SIZE + BLOCK_SIZE / 2
+) * LAT_STEP
+
+reduced_df["Longitude"] = LON_START + (
+    reduced_df["block_j"] * BLOCK_SIZE + BLOCK_SIZE / 2
+) * LON_STEP
+
+reduced_df = reduced_df.drop(columns=["block_i", "block_j"])
+
+# Reorder columns 
+cols = ["Latitude", "Longitude", "recommended_crop"] + numeric_cols
+other_cols = [c for c in reduced_df.columns if c not in cols]
+reduced_df = reduced_df[cols + other_cols]
+
+
+# SAVE CSV
+
+
+output_file = os.path.join(DATA_DIR, "reduced_north_algeria_crop_recommendations.csv")
+
+
+reduced_df.to_csv(output_file, index=False)
+
+
+print("Original size:", len(reduced_algeria_df))
+print("Reduced size:", len(reduced_df))
+
+print("\nCrop distribution after reduction:")
+print(reduced_df["recommended_crop"].value_counts())
+
+print(f"\nSaved to: {output_file}")
+
+
+
+
 # Create map centered in Algeria
 
 map_center = [28.0, 2.6]
 m = folium.Map(location=map_center, zoom_start=6)
 
 # Function to assign color/icon per crop
-# array that attach crops to icons
+# array that attach crops to icons and color
 
-crop_icons = {
-    "Barley": "grain",
-    "Cotton": "cloud",
-    "Maize": "certificate",
-    "Millet": "align-justify",
-    "Potato": "record",
-    "Pulses": "adjust",
-    "Rice": "tint",        
-    "Sugarcane": "tree-deciduous",
-    "Tomato": "cutlery",
-    "Wheat": "leaf",
-    "default": "info-sign"
+crop_styles = {
+    "Barley": {"icon": "grain", "color": "orange"},
+    "Cotton": {"icon": "cloud", "color": "gray"},
+    "Maize": {"icon": "certificate", "color": "cadetblue"},
+    "Millet": {"icon": "align-justify", "color": "lightgreen"},
+    "Potato": {"icon": "record", "color": "beige"},
+    "Pulses": {"icon": "adjust", "color": "purple"},
+    "Rice": {"icon": "tint", "color": "lightblue"},
+    "Sugarcane": {"icon": "tree-deciduous", "color": "darkgreen"},
+    "Tomato": {"icon": "cutlery", "color": "red"},
+    "Wheat": {"icon": "leaf", "color": "darkred"},
+    "default": {"icon": "info-sign", "color": "black"}
 }
 
-for i in range(len(algeria_df)):
-    crop = algeria_df.iloc[i]["recommended_crop"]
-    lat = algeria_df.iloc[i]["Latitude"]
-    lon = algeria_df.iloc[i]["Longitude"]
+for i in range(len(reduced_df)):
+    crop = reduced_df.iloc[i]["recommended_crop"]
+    lat = reduced_df.iloc[i]["Latitude"]
+    lon = reduced_df.iloc[i]["Longitude"]
 
-    icon_name = crop_icons.get(crop, crop_icons["default"])
+    # Get style from dict, fallback to default
+    style = crop_styles.get(crop, crop_styles["default"])
 
     folium.Marker(
         location=[lat, lon],
         popup=f"Crop: {crop}",
-        icon=folium.Icon(icon=icon_name)
+        icon=folium.Icon(
+            icon=style["icon"], 
+            color=style["color"],
+            icon_color="white" 
+        )
     ).add_to(m)
-
 # Save map in src folder you need to run it to see the result
 
 m.save(os.path.join(SRC_DIR, "north_algeria_crop_map.html"))
