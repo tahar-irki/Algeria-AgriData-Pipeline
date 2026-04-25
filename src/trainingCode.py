@@ -317,17 +317,17 @@ m = folium.Map(location=map_center, zoom_start=6)
 # array that attach crops to icons and color
 
 crop_styles = {
-    "Barley": {"icon": "grain", "color": "orange"},
-    "Cotton": {"icon": "cloud", "color": "gray"},
-    "Maize": {"icon": "certificate", "color": "cadetblue"},
-    "Millet": {"icon": "align-justify", "color": "lightgreen"},
-    "Potato": {"icon": "record", "color": "beige"},
-    "Pulses": {"icon": "adjust", "color": "purple"},
-    "Rice": {"icon": "tint", "color": "lightblue"},
-    "Sugarcane": {"icon": "tree-deciduous", "color": "darkgreen"},
-    "Tomato": {"icon": "cutlery", "color": "red"},
-    "Wheat": {"icon": "leaf", "color": "darkred"},
-    "default": {"icon": "info-sign", "color": "black"}
+    "Barley": {"icon": "grain", "color": "orange","icon_color": "white"},
+    "Cotton": {"icon": "cloud", "color": "white","icon_color": "gray"},
+    "Maize": {"icon": "certificate", "color": "cadetblue","icon_color": "white"},
+    "Millet": {"icon": "align-justify", "color": "lightgreen","icon_color": "white"},
+    "Potato": {"icon": "record", "color": "darkpurple","icon_color": "white"},
+    "Pulses": {"icon": "adjust", "color": "lightred","icon_color": "white"},
+    "Rice": {"icon": "align-center", "color": "cadetblue","icon_color": "white"},
+    "Sugarcane": {"icon": "tree-deciduous", "color": "darkred","icon_color": "white"},
+    "Tomato": {"icon": "apple", "color": "red","icon_color": "white"},
+    "Wheat": {"icon": "leaf", "color": "darkgreen","icon_color": "white"},
+    "default": {"icon": "info-sign", "color": "gray","icon_color": "red"}
 }
 
 for i in range(len(reduced_df)):
@@ -344,11 +344,11 @@ for i in range(len(reduced_df)):
         icon=folium.Icon(
             icon=style["icon"], 
             color=style["color"],
-            icon_color="white" 
+            icon_color=style["icon_color"] 
         )
     ).add_to(m)
 # Save map in src folder you need to run it to see the result
 
-m.save(os.path.join(SRC_DIR, "north_algeria_crop_map.html"))
+m.save(os.path.join(SRC_DIR, "algeriaNorth_crop_map.html"))
 
 print("Map saved as north_algeria_crop_map.html in src folder.")

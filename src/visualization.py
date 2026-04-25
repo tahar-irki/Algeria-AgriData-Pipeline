@@ -35,8 +35,10 @@ ACCENT_TEAL   = "#1D9E75"
 ACCENT_CORAL  = "#D85A30"
 ACCENT_PURPLE = "#7F77DD"
 ACCENT_PINK   = "#D4537E"
-CROP_COLORS   = [ACCENT_GREEN, ACCENT_AMBER, ACCENT_TEAL,
-                 ACCENT_CORAL, ACCENT_PURPLE, ACCENT_PINK, "#5DCAA5", "#FAC775"]
+ACCENT_YELLOW = "#F4D03F" 
+ACCENT_GOLD   = "#E67E22"
+CROP_COLORS   = [ACCENT_GREEN, ACCENT_AMBER, ACCENT_TEAL, ACCENT_YELLOW,
+                 ACCENT_CORAL, ACCENT_PURPLE, ACCENT_PINK, ACCENT_GOLD, "#5DCAA5", "#FAC775"]
 
 # ── Theme-derived tokens ─────────────────────────────────────
 if is_dark:
@@ -58,6 +60,7 @@ if is_dark:
     MAP_STYLE       = "carto-darkmatter"
     TOGGLE_ICON     = "☀️"
     TOGGLE_LABEL    = "Switch to Light mode"
+    ACCENT_AMBER   = "#e7f5d5"
 else:
     BG_PAGE        = "#f5f8f0"
     BG_SIDEBAR     = "#eef4e5"
@@ -77,6 +80,7 @@ else:
     MAP_STYLE      = "carto-positron"
     TOGGLE_ICON    = "🌙"
     TOGGLE_LABEL   = "Switch to Dark mode"
+    ACCENT_AMBER   = "#101116"
 
 
 # ── CSS injection ─────────────────────────────────────────────
@@ -439,7 +443,15 @@ with col2:
             color="Crop", color_discrete_sequence=CROP_COLORS,
         )
         fig_bar.update_traces(marker_line_width=0)
-        fig_bar.update_layout(yaxis=dict(categoryorder="total ascending"))
+        fig_bar.update_layout(
+            yaxis=dict(
+                categoryorder="total ascending",
+                title=dict(font=dict(color=ACCENT_AMBER))
+            ),
+            xaxis=dict(
+                title=dict(font=dict(color=ACCENT_AMBER))
+            )
+        )
         apply_layout(fig_bar, height=380, show_legend=False)
         st.plotly_chart(fig_bar, use_container_width=True)
 
@@ -462,6 +474,14 @@ with col3:
             color_discrete_sequence=CROP_COLORS,
         )
         fig_scatter.update_traces(marker=dict(size=6))
+        fig_scatter.update_layout(
+            xaxis=dict(
+                title=dict(font=dict(color=ACCENT_AMBER))
+            ),
+            yaxis=dict(
+                title=dict(font=dict(color=ACCENT_AMBER))
+            )
+        )
         apply_layout(fig_scatter, height=320)
         st.plotly_chart(fig_scatter, use_container_width=True)
 
@@ -474,6 +494,14 @@ with col4:
             color="recommended_crop",
             labels={"recommended_crop": "Crop", "Soil_pH": "pH"},
             color_discrete_sequence=CROP_COLORS,
+        )
+        fig_box.update_layout(
+            xaxis=dict(
+                title=dict(font=dict(color=ACCENT_AMBER))
+            ),
+            yaxis=dict(
+                title=dict(font=dict(color=ACCENT_AMBER))
+            )
         )
         apply_layout(fig_box, height=320, show_legend=False)
         st.plotly_chart(fig_box, use_container_width=True)
@@ -496,6 +524,14 @@ with col5:
             labels={"recommended_crop": "", "Rainfall": "Rainfall (mm)"},
             color_discrete_sequence=CROP_COLORS,
         )
+        fig_violin.update_layout(
+            xaxis=dict(
+                title=dict(font=dict(color=ACCENT_AMBER))
+            ),
+            yaxis=dict(
+                title=dict(font=dict(color=ACCENT_AMBER))
+            )
+        )
         apply_layout(fig_violin, height=340, show_legend=False)
         st.plotly_chart(fig_violin, use_container_width=True)
 
@@ -515,7 +551,7 @@ with col6:
             ],
             zmin=-1, zmax=1,
         )
-        fig_heat.update_traces(textfont=dict(size=10, color=TEXT_PRIMARY))
+        fig_heat.update_traces(textfont=dict(size=10, color="#ffffff"))
         fig_heat.update_layout(
             coloraxis_colorbar=dict(
                 thickness=10, len=0.8,

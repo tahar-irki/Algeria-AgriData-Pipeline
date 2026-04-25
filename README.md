@@ -39,28 +39,35 @@ This project is composed of **two main programs** that work together to:
 ┌────────────────────────────────────────────────────────────┐
 │                ASYNC DATA COLLECTION PIPELINE              │
 │                                                            │
-│   Grid نقاط → Weather Agent + Soil Agent → Merge Data      │
+│   Grid → Weather Agent + Soil Agent → Merge Data           │
 │                → Algeria Dataset (CSV)                     │
 └────────────────────────────┬───────────────────────────────┘
                              │
                              ▼
                 ┌────────────────────────────┐
                 │ Prediction + Map (Folium)  │
+                └────────────┬───────────────┘
+                             │
+                             ▼
+                ┌────────────────────────────┐
+                │ Interactive Dashboard      │
+                │ (Streamlit Visualization)  │
                 └────────────────────────────┘
 ```
+`
 
 ---
 
-This project is composed of **two main programs** that work together to:
+This project is composed of **three main programs** that work together to:
 
 1. **Collect agricultural data (weather + soil) for Algeria**
 2. **Train a Machine Learning model to recommend crops**
-3. **Visualize the results on an interactive map**
+3. **Visualize and explore the results through an interactive map and dashboard**
 
 The system follows a pipeline architecture:
 
 ```
-Data Fetching → Data Cleaning → Model Training → Prediction → Visualization
+Data Fetching → Data Cleaning → Model Training → Prediction → Visualization → Interactive Dashboard
 ```
 
 ---
@@ -162,7 +169,7 @@ Each coordinate = one agricultural data point
 The result is saved as:
 
 ```
-data/mid_algeria_agro_data.csv
+data/north_algeria_agro_data.csv
 ```
 
 Each row contains:
@@ -170,6 +177,15 @@ Each row contains:
 * Location (lat, lon)
 * Weather features
 * Soil features
+
+---
+---
+
+## ⚠️ Notes
+
+* APIs may return **429 (rate limit)** → handled automatically
+* Soil data is slower due to strict rate limiting
+* Dataset resolution depends on `STEP_SIZE`
 
 ---
 
@@ -270,7 +286,7 @@ A visualization of the confusion matrix is also generated.
 Input:
 
 ```
-data/mid_algeria_agro_data.csv
+data/north_algeria_agro_data.csv
 ```
 
 Processing:
@@ -282,7 +298,7 @@ Processing:
 Output:
 
 ```
-data/algeria_crop_recommendations.csv
+data/north_algeria_crop_recommendations.csv
 ```
 
 Each row now includes:
@@ -293,18 +309,45 @@ recommended_crop
 
 ---
 
-### 🗺 Step 5: Visualization
+### 🗺 Step 5: Visualization (Optimized Map Rendering)
 
-* Uses **Folium** to generate an interactive map
-* Each location is marked with:
+* Uses **Folium** to generate an interactive map of crop recommendations  
+* To prevent map freezing, the dataset is **reduced using spatial aggregation**
 
-  * Crop recommendation
-  * Icon representing crop type
+---
 
-Output:
+#### 🔽 Data Reduction Strategy
+
+* The dataset is grouped into **geographical blocks (~27 km each)**  
+* Each block represents multiple nearby points
+
+Aggregation rules:
+* **Numeric features** (Temperature, Humidity, Rainfall, etc.) → averaged  
+* **Crop recommendation** → selected using a **priority system** (rarer crops are preserved)  
+* **Soil type** → most frequent value (mode)
+
+✅ This ensures:
+* Faster map rendering  
+* Balanced crop visualization (no dominant crop hiding others)
+
+---
+
+#### 🎨 Map Features
+
+* Interactive map centered on Algeria  
+* Each marker displays:
+  * 📍 Crop recommendation (popup)
+  * 🎨 Custom icon and color based on crop type  
+* Includes a **default style fallback** for unknown crops  
+
+---
+
+#### 💾 Outputs
+
+**Reduced dataset:**
 
 ```
-src/algeria_crop_map.html
+src/algeriaNorth_crop_map.html
 ```
 
 ---
@@ -326,18 +369,10 @@ src/algeria_crop_map.html
    ↓
 7. Predict crops for Algeria
    ↓
-8. Generate map visualization
+8. Reduce the number of point    
+   ↓
+9. Generate map visualization
 ```
-
----
-
-## 📥 Kaggle Dataset Loader
-
-File: `crop_dataframe.py`
-
-Before training, download the dataset.
-
-
 ---
 
 ## 🖼 Example Outputs (Screenshots)
@@ -354,6 +389,163 @@ Before training, download the dataset.
 ### 🗺 Crop Recommendation Map
 
 ![Crop Map](docs/crop_map.png)
+
+
+
+
+
+---
+## 🆕 📊 Program 3: Interactive Dashboard (Streamlit)
+
+File: `visuakization.py`
+
+### 🎯 Purpose
+
+This program provides a **modern interactive dashboard** to explore crop recommendations and environmental data visually.
+
+---
+
+### ✨ Features
+
+#### 🎛 Filters
+
+* Country selection
+* Crop type filtering
+* Soil type filtering
+* Temperature range slider
+
+---
+
+#### 📍 Interactive Map
+
+* Displays crop recommendations geographically
+* Built with Plotly Mapbox
+* Points sized by rainfall and colored by crop
+
+---
+
+#### 📊 Data Visualizations
+
+* **Crop Frequency Bar Chart** → shows most recommended crops
+* **Temperature vs Humidity Scatter Plot** → climate patterns
+* **Soil pH Boxplot** → distribution per crop
+* **Rainfall Violin Plot** → rainfall variability
+* **Correlation Heatmap** → relationships between features
+* **Nutrient Radar Chart** → N, P, K, Organic Carbon comparison
+
+---
+
+#### 📈 KPI Metrics
+
+* Total records
+* Top recommended crop
+* Average temperature
+* Average rainfall
+* Average soil pH
+
+---
+
+#### 🌗 Theme Support
+
+* Light / Dark mode toggle
+* Custom styled UI using CSS
+
+---
+
+#### 💡 Insight Box
+
+* Automatically summarizes dominant crop and conditions based on filters
+
+---
+
+## 🚀 How to Run Dashboard
+
+```
+streamlit run visualization.py
+```
+
+---
+---
+
+## 📥 Kaggle Dataset Loader
+
+File: `crop_dataframe.py`
+
+Before training, download the dataset.
+
+
+---
+
+## 🖼 Example Outputs (Screenshots)
+
+### 📊 The Dashboard
+
+![The Dashboard](docs/confusion_matrix.png)
+
+
+
+
+
+
+### 🗺 Crop Recommendation Map
+
+![Geospatial distribution](docs/Geospatial_distribution.png)
+
+
+
+
+
+
+### 🗺 Crop frequency
+
+![Crop frequency](docs/Crop_frequency.png)
+
+
+
+
+
+
+
+### 🗺 Climate envelope — temp vs humidity
+
+![Climate envelope](docs/Climate_envelope.png)
+
+
+
+
+
+
+### 🗺 Soil pH distribution by crop
+
+![Soil pH distribution by crop](docs/Soil_pH_distribution_by_crop.png)
+
+
+
+
+
+
+### 🗺 Rainfall distribution by crop Correlation heatmap
+
+![Rainfall distribution by crop](docs/Rainfall_distribution_by_crop.png)
+
+
+
+
+
+
+### 🗺 Correlation heatmap  Nutrient profile by crop (N · P · K · Organic C)
+
+![Correlation heatmap](docs/Correlation_heatmap.png)
+
+
+
+
+
+
+### 🗺 Nutrient profile by crop (N · P · K · Organic C)
+
+![Nutrient profile by crop](docs/Nutrient_profile_by_crop.png)
+
 
 
 
@@ -381,16 +573,12 @@ python trainingCode.py
 better install live server extension
 right click on the file and select the extension algeria_crop_map.html
 ```
+### Step 4 — visualization 
 
----
+```
+streamlit run visualization.py
+```
 
-## ⚠️ Notes
-
-* APIs may return **429 (rate limit)** → handled automatically
-* Soil data is slower due to strict rate limiting
-* Dataset resolution depends on `STEP_SIZE`
-
----
 
 ## 📌 Key Concepts Used
 
@@ -399,6 +587,7 @@ right click on the file and select the extension algeria_crop_map.html
 * Data Cleaning & Preprocessing
 * Machine Learning (Random Forest)
 * Geospatial Visualization (Folium)
+* Dashboard (Streamlit)
 
 ---
 
