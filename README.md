@@ -480,7 +480,7 @@ Before training, download the dataset.
 
 ### 📊 The Dashboard
 
-![The Dashboard](docs/confusion_matrix.png)
+![The Dashboard](docs/The_Dashboard.png)
 
 
 
