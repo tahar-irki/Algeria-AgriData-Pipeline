@@ -60,7 +60,9 @@ if is_dark:
     MAP_STYLE       = "carto-darkmatter"
     TOGGLE_ICON     = "☀️"
     TOGGLE_LABEL    = "Switch to Light mode"
-    ACCENT_AMBER   = "#e7f5d5"
+    ACCENT_AMBER    = "#e7f5d5"
+    BG_button       = "#1A2416"
+    BORDER_I        = "#2A3D22"
 else:
     BG_PAGE        = "#f5f8f0"
     BG_SIDEBAR     = "#eef4e5"
@@ -81,6 +83,8 @@ else:
     TOGGLE_ICON    = "🌙"
     TOGGLE_LABEL   = "Switch to Dark mode"
     ACCENT_AMBER   = "#101116"
+    BG_button      = "#101116"
+    BORDER_I       = "#ffffff"
 
 
 # ── CSS injection ─────────────────────────────────────────────
@@ -88,25 +92,30 @@ st.markdown(f"""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500&display=swap');
 
+/* ── Global Transitions & App Structure ── */
 html, body, .stApp {{
     background-color: {BG_PAGE} !important;
+    transition: background-color 0.4s ease;
 }}
 
+/* Smooth Sidebar Movement */
+[data-testid="stSidebar"] {{
+    background-color: {BG_SIDEBAR} !important;
+    border-right: 1px solid {BORDER};
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), width 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}}
+
+/* Smooth Main Content Shift */
 .main {{
     background-color: {BG_PAGE} !important;
+    transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
 }}
 
 .block-container {{
     background-color: {BG_PAGE} !important;
 }}
-.main .block-container {{
-    background-color: {BG_PAGE} !important;
-}}
-/* ── Sidebar ── */
-[data-testid="stSidebar"] > div:first-child {{
-    background-color: {BG_SIDEBAR} !important;
-    border-right: 1px solid {BORDER};
-}}
+
+/* ── Sidebar Labels ── */
 [data-testid="stSidebar"] label {{
     font-size: 11px !important;
     font-weight: 500 !important;
@@ -115,7 +124,8 @@ html, body, .stApp {{
     color: {TEXT_MUTED} !important;
 }}
 
-/* ── Theme toggle button ── */
+/* ── Buttons (Toggle & Collapse) ── */
+/* Theme toggle button */
 [data-testid="stSidebar"] [data-testid="stButton"] > button {{
     background: {BG_CARD} !important;
     border: 1px solid {BORDER} !important;
@@ -124,12 +134,54 @@ html, body, .stApp {{
     font-size: 13px !important;
     font-weight: 500 !important;
     padding: 6px 14px !important;
-    transition: all 0.2s ease;
+    transition: all 0.3s cubic-bezier(0.25, 0.1, 0.25, 1.0) !important;
 }}
+
 [data-testid="stSidebar"] [data-testid="stButton"] > button:hover {{
     background: {ACCENT_GREEN} !important;
     color: white !important;
     border-color: {ACCENT_GREEN} !important;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}}
+
+
+/* Target the button using its stable Test ID and Kind attribute */
+
+button[data-testid="stExpandSidebarButton"][kind="headerNoPadding"] {{
+    background: {BG_button} !important;
+    border: 1px solid {BORDER_I} !important;
+    border-radius: 40% !important;
+    color: {ACCENT_GREEN} !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    transition: all 0.3s cubic-bezier(0.25, 0.1, 0.25, 1.0) !important;
+}}
+
+
+/* Hover state */
+button[data-testid="stExpandSidebarButton"]:hover {{
+    background-color: {ACCENT_GREEN} !important;
+    border-color: {ACCENT_GREEN} !important;
+}}
+
+button[data-testid="stExpandSidebarButton"]:hover span {{
+    color: white !important;
+}}
+
+/* Sidebar Arrow/Collapse Button stExpandSidebarButton   stBaseButton-headerNoPadding */
+[data-testid="stSidebarCollapseButton"] button {{
+    background: {BG_button} !important;
+    border: 1px solid {BORDER_I} !important;
+    border-radius: 40% !important;
+    color: {ACCENT_GREEN} !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    transition: all 0.3s cubic-bezier(0.25, 0.1, 0.25, 1.0) !important;
+}}
+
+[data-testid="stSidebarCollapseButton"] button:hover {{
+    background: {ACCENT_GREEN} !important;
+    color: white !important;
 }}
 
 /* ── Metric cards ── */
@@ -138,13 +190,20 @@ html, body, .stApp {{
     border: 1px solid {BORDER} !important;
     border-radius: 12px !important;
     padding: 1rem 1.25rem !important;
+    transition: transform 0.3s ease !important;
 }}
+
+[data-testid="metric-container"]:hover {{
+    transform: translateY(-2px);
+}}
+
 [data-testid="stMetricLabel"] p {{
     font-size: 11px !important;
     text-transform: uppercase !important;
     letter-spacing: 0.07em !important;
     color: {TEXT_MUTED} !important;
 }}
+
 [data-testid="stMetricValue"] {{
     font-family: 'DM Serif Display', serif !important;
     font-size: 2rem !important;
@@ -191,15 +250,31 @@ html, body, .stApp {{
 }}
 .insight-box strong {{ color: {INSIGHT_STRONG}; }}
 
-/* ── Divider ── */
-.divider {{
-    border: none;
-    border-top: 1px solid {BORDER};
-    margin: 1rem 0;
+/* ── Expanders ── */
+[data-testid="stExpander"] {{
+    background: {BG_CARD} !important;
+    border: 2px solid {BORDER} !important;
+    border-radius: 10px !important;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.07) !important;
+    transition: all 0.3s ease !important;
+}}
+
+[data-testid="stExpander"] summary {{
+    background: {BG_CARD} !important;
+    border-radius: 10px !important;
+    color: {TEXT_PRIMARY} !important;
+    font-size: 13px !important;
+    font-weight: 500 !important;
+    padding: 0.6rem 1rem !important;
+    transition: background 0.3s ease !important;
+}}
+
+[data-testid="stExpander"] summary:hover {{
+    background: {INSIGHT_BG} !important;
 }}
 
 /* ── Hide Streamlit chrome ── */
-#MainMenu, footer{{ visibility: hidden; }}
+#MainMenu, footer {{ visibility: hidden; }}
 header {{
     background: transparent !important;
 }}
@@ -521,7 +596,7 @@ with col5:
         fig_violin = px.violin(
             fdf, x="recommended_crop", y="Rainfall",
             color="recommended_crop", box=True, points=False,
-            labels={"recommended_crop": "", "Rainfall": "Rainfall (mm)"},
+            labels={"recommended_crop": "Crops", "Rainfall": "Rainfall (mm)"},
             color_discrete_sequence=CROP_COLORS,
         )
         fig_violin.update_layout(
@@ -644,7 +719,7 @@ st.markdown("<br>", unsafe_allow_html=True)
 # ════════════════════════════════════════════════════════════════
 with st.expander("📄 Filtered data preview", expanded=False):
     st.dataframe(
-        fdf.head(200).reset_index(drop=True),
+        fdf.head(1000).reset_index(drop=True),
         use_container_width=True,
         hide_index=True,
     )
