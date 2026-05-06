@@ -9,3 +9,4 @@ pycountry
 matplotlib
 streamlit 
 plotly
+scikit-learn
